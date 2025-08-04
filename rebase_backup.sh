@@ -6,20 +6,38 @@ set -eu
 BRANCH_REGEX="[a-zA-Z0-9._/-]+"
 BRANCH_SEPARATOR_REGEX="'($BRANCH_REGEX)' into '($BRANCH_REGEX)'"
 COMMIT_DESC=$(git log -1 --pretty=%B) 
+EXPECTED_MERGE_COMMIT="   Merge branch '<merged_branch>' into '<merge_dest>'
+
+   <Message>
+
+   See merge request <merge_request_name>"
 
 # Extract branches from merge commit description
-BRANCH_NOT_FOUND=0
+function branch_not_found() {
+    MSG="Error :"
+    if [[ -z "${1:-}" ]]; then
+        MSG+=" No branch found"
+    else
+        MSG+=" Branch '$1' not found"
+    fi
+    MSG+=" in message of current commit ($(git rev-parse HEAD))"
+    echo $MSG
+    echo "Are you checked out at the merge commit ? "
+    echo "Expected format : "
+    echo "$EXPECTED_MERGE_COMMIT"
+    exit 1
+}
 if [[ $COMMIT_DESC =~ $BRANCH_SEPARATOR_REGEX ]]; then
     MERGED_BRANCH="${BASH_REMATCH[1]}"
     MERGE_DEST="${BASH_REMATCH[2]}"
     if [[ -z "$MERGED_BRANCH" ]]; then
-        BRANCH_NOT_FOUND=1
+        branch_not_found "$MERGED_BRANCH"
     fi
     if [[ -z "$MERGE_DEST" ]]; then
-        BRANCH_NOT_FOUND=1
+        branch_not_found "$MERGE_DEST"
     fi
 else
-    BRANCH_NOT_FOUND=1
+    branch_not_found
 fi
 
 if [ $BRANCH_NOT_FOUND -eq 1 ]; then
