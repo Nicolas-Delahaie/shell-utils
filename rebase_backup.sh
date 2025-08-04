@@ -44,9 +44,10 @@ else
     branch_not_found
 fi
 
-if [ $BRANCH_NOT_FOUND -eq 1 ]; then
-    echo "Erreur : Impossible de trouver les branches dans le message de commit."
-    echo "Format attendu : 'Merge branch '<merged_branch>' into '<merge_dest>''"
+# Recherche auto du numero de merge request dans le commit de merge
+MERGE_NUMBER=$(echo "$COMMIT_DESC" | grep -oE '![0-9]+' | grep -oE '[0-9]+')
+if [[ -z "$MERGE_NUMBER" ]]; then
+    echo "Erreur : numero de merge request introuvable dans le commit."
     exit 1
 fi
 
@@ -56,29 +57,44 @@ echo "Starting backup rebasing on current project \"$CURRENT_PROJECT_NAME\" of m
 git show-ref --verify refs/heads/$MERGED_BRANCH >/dev/null;
 git show-ref --verify refs/heads/$MERGE_DEST >/dev/null;
 git show-ref --verify refs/heads/$BACKUP_BRANCH >/dev/null;
+
+# Starting merge backup
+echo "Switching to branch $MERGED_BRANCH"
+git switch -q $MERGED_BRANCH
+
 exit 1;
 
+echo "Starting rebase of '$BACKUP_BRANCH' branch into '$MERGED_BRANCH' branch."
+git rebase -X theirs $BACKUP_BRANCH --committer-date-is-author-date &>/dev/null || {
+    read -n 1 -p "Continue the rebase ? (o/n) " choice
+    if [[ "$choice" != "o" ]]; then
+        echo "Rebase annulé."
+        exit 0  
+    fi
+    git checkout --theirs .
+    git add .
+    GIT_EDITOR=true git rebase --continue > /dev/null
+}
 
-git switch $MERGED_BRANCH
-git rebase -X theirs $BACKUP_BRANCH --committer-date-is-author-date
+# Applying differences
+git diff --quiet $MERGED_BRANCH $MERGE_DEST || {
+    # Creating delta commit
+    git checkout $MERGE_DEST -- .
+    COMMIT_DATE=$(git log -1 --format=%cI $MERGE_DEST)
+    GIT_AUTHOR_DATE="$COMMIT_DATE" GIT_COMMITTER_DATE="$COMMIT_DATE" git commit -m "Delta from $MERGE_DEST and $MERGED_BRANCH after rebase"
+}
 
-read -p "Continue the rebase ? (o/n) " choice
-if [[ "$choice" != "o" ]]; then
-    echo "Rebase annulé."
-    exit 0
-fi
-git add .
-git rebase --continue
-# Gerer la validation du fichier de messages de commit
-git diff $MERGED_BRANCH $MERGE_DEST # Checker que le resultat sois vide
 git branch -d $BACKUP_BRANCH
 git branch -M $BACKUP_BRANCH
 git branch --unset-upstream # Ameliorer cette partie de remplacement moche
 git tag MR-$MERGE_NUMBER
 
 read -p "Delete remote branch ? (o/n) " choice
-if [[ "$choice" != "o" ]]; then
+if [[ "$choice" = "o" ]]; then
     echo "Suppression annulee."
-    exit 0
+    git push --delete origin $MERGED_BRANCH
 fi
-git push --delete origin $MERGED_BRANCH
+
+git switch $MERGE_DEST
+
+echo "Backup completed successfully."
