@@ -1,10 +1,14 @@
 #!/bin/bash
-# Bash is necessar for regex tables
-BACKUP_BRANCH={1:-'backup'}
+# Before executing this script, ensure you are at the merge commit.
+# It is recommended to checkout local master to the version of the merge you want to backup.
 set -eu
 
+# At first, going to the project path for every "git" calls
+PROJECT_PATH=$(git rev-parse --show-toplevel)
+CURRENT_PROJECT_NAME=$(basename $PROJECT_PATH)
+BACKUP_BRANCH='backup'
 BRANCH_REGEX="[a-zA-Z0-9._/-]+"
-BRANCH_SEPARATOR_REGEX="'($BRANCH_REGEX)' into '($BRANCH_REGEX)'"
+BRANCH_SEPARATOR_REGEX=".*'($BRANCH_REGEX)' into '($BRANCH_REGEX)'.*"
 COMMIT_DESC=$(git log -1 --pretty=%B) 
 EXPECTED_MERGE_COMMIT="   Merge branch '<merged_branch>' into '<merge_dest>'
 
@@ -46,24 +50,14 @@ if [ $BRANCH_NOT_FOUND -eq 1 ]; then
     exit 1
 fi
 
+echo "Starting backup rebasing on current project \"$CURRENT_PROJECT_NAME\" of merge request number: $MERGE_NUMBER"
+
 # Check if branches exist
 git show-ref --verify refs/heads/$MERGED_BRANCH >/dev/null;
 git show-ref --verify refs/heads/$MERGE_DEST >/dev/null;
 git show-ref --verify refs/heads/$BACKUP_BRANCH >/dev/null;
+exit 1;
 
-echo $BACKUP_BRANCH, 
-echo $MERGED_BRANCH 
-echo $MERGE_DEST
-echo $COMMIT_DESC
-
-exit 1
-
-# Recherche auto du numero de merge request dans le commit de merge
-MERGE_NUMBER=$($COMMIT_DESC | grep -oE '![0-9]+' | grep -oE '[0-9]+')
-if [[ -z "$MERGE_NUMBER" ]]; then
-    echo "Erreur : numero de merge request introuvable dans le commit."
-    exit 1
-fi
 
 git switch $MERGED_BRANCH
 git rebase -X theirs $BACKUP_BRANCH --committer-date-is-author-date
