@@ -70,10 +70,9 @@ git rebase -X theirs $BACKUP_BRANCH --committer-date-is-author-date &>/dev/null 
     done
 }
 
-# Applying differences
-git diff --quiet $MERGED_BRANCH $MERGE_DEST || {
-    # Creating delta commit
-    git checkout $MERGE_DEST -- .
+# Creating delta commit
+git diff $MERGED_BRANCH $MERGE_DEST | git apply --whitespace=nowarn >/dev/null && {
+    git add .
     COMMIT_DATE=$(git log -1 --format=%cI $MERGE_DEST)
     GIT_AUTHOR_DATE="$COMMIT_DATE" GIT_COMMITTER_DATE="$COMMIT_DATE" git commit -m "Delta from $MERGE_DEST and $MERGED_BRANCH after rebase"
 }
