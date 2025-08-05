@@ -54,9 +54,13 @@ fi
 echo "Starting backup rebasing on current project \"$CURRENT_PROJECT_NAME\" of merge request number: $MERGE_NUMBER"
 
 # Check if branches exist
-git show-ref --verify refs/heads/$MERGED_BRANCH >/dev/null;
 git show-ref --verify refs/heads/$MERGE_DEST >/dev/null;
 git show-ref --verify refs/heads/$BACKUP_BRANCH >/dev/null;
+git show-ref --verify refs/heads/$MERGED_BRANCH 2>/dev/null || {
+    git show-ref --verify refs/remotes/origin/$MERGED_BRANCH >/dev/null
+    # Creates local branch from remote
+    git branch $MERGED_BRANCH origin/$MERGED_BRANCH
+}
 
 # Starting merge backup
 echo "Switching to branch $MERGED_BRANCH"
