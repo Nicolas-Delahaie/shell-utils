@@ -79,10 +79,10 @@ git diff $MERGED_BRANCH $MERGE_DEST | git apply --whitespace=nowarn >/dev/null &
 
 git branch -d $BACKUP_BRANCH
 git branch -M $BACKUP_BRANCH
-git branch --unset-upstream # TODO : Ameliorer cette partie de remplacement moche
+git branch --unset-upstream 
 git tag MR-$MERGE_NUMBER
 
-read -p "Delete remote branch ? (y/n) " choice
+read -n 1 -p "Delete remote branch ? (y/n) " choice
 if [[ "$choice" = "y" ]]; then
     echo "Suppression annulee."
     git push --delete origin $MERGED_BRANCH
