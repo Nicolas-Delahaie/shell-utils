@@ -44,10 +44,10 @@ else
     branch_not_found
 fi
 
-# Recherche auto du numero de merge request dans le commit de merge
+# Automatically search for the merge request number in the merge commit
 MERGE_NUMBER=$(echo "$COMMIT_DESC" | grep -oE '![0-9]+' | grep -oE '[0-9]+')
 if [[ -z "$MERGE_NUMBER" ]]; then
-    echo "Erreur : numero de merge request introuvable dans le commit."
+    echo "Error : merge number not found in commit message."
     exit 1
 fi
 
@@ -66,8 +66,8 @@ exit 1;
 
 echo "Starting rebase of '$BACKUP_BRANCH' branch into '$MERGED_BRANCH' branch."
 git rebase -X theirs $BACKUP_BRANCH --committer-date-is-author-date &>/dev/null || {
-    read -n 1 -p "Continue the rebase ? (o/n) " choice
-    if [[ "$choice" != "o" ]]; then
+    read -n 1 -p "Continue the rebase ? (y/n) " choice
+    if [[ "$choice" != "y" ]]; then
         echo "Rebase annulé."
         exit 0  
     fi
@@ -86,11 +86,11 @@ git diff --quiet $MERGED_BRANCH $MERGE_DEST || {
 
 git branch -d $BACKUP_BRANCH
 git branch -M $BACKUP_BRANCH
-git branch --unset-upstream # Ameliorer cette partie de remplacement moche
+git branch --unset-upstream # TODO : Ameliorer cette partie de remplacement moche
 git tag MR-$MERGE_NUMBER
 
-read -p "Delete remote branch ? (o/n) " choice
-if [[ "$choice" = "o" ]]; then
+read -p "Delete remote branch ? (y/n) " choice
+if [[ "$choice" = "y" ]]; then
     echo "Suppression annulee."
     git push --delete origin $MERGED_BRANCH
 fi
