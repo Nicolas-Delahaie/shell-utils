@@ -62,18 +62,12 @@ git show-ref --verify refs/heads/$BACKUP_BRANCH >/dev/null;
 echo "Switching to branch $MERGED_BRANCH"
 git switch -q $MERGED_BRANCH
 
-exit 1;
-
 echo "Starting rebase of '$BACKUP_BRANCH' branch into '$MERGED_BRANCH' branch."
 git rebase -X theirs $BACKUP_BRANCH --committer-date-is-author-date &>/dev/null || {
-    read -n 1 -p "Continue the rebase ? (y/n) " choice
-    if [[ "$choice" != "y" ]]; then
-        echo "Rebase annulé."
-        exit 0  
-    fi
-    git checkout --theirs .
-    git add .
-    GIT_EDITOR=true git rebase --continue > /dev/null
+    while true; do 
+        git add .
+        GIT_EDITOR=true git rebase --continue &>/dev/null && break
+    done
 }
 
 # Applying differences
