@@ -17,3 +17,5 @@ Ameliorations
 2. Vérifier que le tag avec le numero du merge precedent est bien present
 3. Créer la branche de backup si elle n'existe pas
 4. Créer un catch all qui remet le git dans l'etat precedent, en retirant toutes les modifs en attente etc
+5. Ne plus regarder la branche de destination, mais l'emplacement actuel
+   1. Plus besoins de reset master au commit de merge souhaité, juste de se déplacer dessus
