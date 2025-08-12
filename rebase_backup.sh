@@ -1,31 +1,53 @@
 #!/bin/bash
-# Before executing this script, ensure you are at the merge commit.
-# It is recommended to checkout local master to the version of the merge you want to backup.
 set -eu
 
-# At first, going to the project path for every "git" calls
-PROJECT_PATH=$(git rev-parse --show-toplevel)
-CURRENT_PROJECT_NAME=$(basename $PROJECT_PATH)
+# ---------------------------------------------------------------------------- #
+#                                   CONSTANTS                                  #
+# ---------------------------------------------------------------------------- #
 BACKUP_BRANCH='backup'
 BRANCH_REGEX="[a-zA-Z0-9._/-]+"
-BRANCH_SEPARATOR_REGEX=".*'($BRANCH_REGEX)' into '($BRANCH_REGEX)'.*"
-COMMIT_DESC=$(git log -1 --pretty=%B) 
-EXPECTED_MERGE_COMMIT="   Merge branch '<merged_branch>' into '<merge_dest>'
+BRANCH_SEPARATOR_REGEX=".*'($BRANCH_REGEX)' into '$BRANCH_REGEX'.*"
+EXPECTED_MERGE_COMMIT="   Merge branch '<MERGED_BRANCH>' into '<MERGE_DEST>'
 
    <Message>
 
    See merge request <merge_request_name>"
 
-# Extract branches from merge commit description
+# ---------------------------------------------------------------------------- #
+#                                    CHECKS                                    #
+# ---------------------------------------------------------------------------- #
+INITIAL_COMMIT=$(git rev-parse HEAD)
+MERGE_DEST=${1:-$INITIAL_COMMIT}
+PROJECT_PATH=$(git rev-parse --show-toplevel)
+CURRENT_PROJECT_NAME=$(basename $PROJECT_PATH)
+
+# Checking out the merge destination commit
+if [[ "$MERGE_DEST" != "$INITIAL_COMMIT" ]]; then
+    echo "Switching to merge destination commit."
+    git checkout -q $MERGE_DEST
+else
+    echo "Using current HEAD as merge destination commit."
+fi
+COMMIT_DESC=$(git log -1 --pretty=%B) 
+
+# TODO check the merge dest of the commit is the real merge dest 
+
+# Check if branches exist
+git cat-file -e $MERGE_DEST >/dev/null || {
+    echo "Error: merge destination commit '$MERGE_DEST' does not exist."
+    exit 1
+}
+
+# Extract destination branch from merge commit description
 function branch_not_found() {
-    MSG="Error :"
+    msg="Error :"
     if [[ -z "${1:-}" ]]; then
-        MSG+=" No branch found"
+        msg+=" No branch found"
     else
-        MSG+=" Branch '$1' not found"
+        msg+=" $1 not found"
     fi
-    MSG+=" in message of current commit ($(git rev-parse HEAD))"
-    echo $MSG
+    msg+=" in message of target commit ($(git rev-parse HEAD))"
+    echo $msg
     echo "Are you checked out at the merge commit ? "
     echo "Expected format : "
     echo "$EXPECTED_MERGE_COMMIT"
@@ -33,16 +55,20 @@ function branch_not_found() {
 }
 if [[ $COMMIT_DESC =~ $BRANCH_SEPARATOR_REGEX ]]; then
     MERGED_BRANCH="${BASH_REMATCH[1]}"
-    MERGE_DEST="${BASH_REMATCH[2]}"
-    if [[ -z "$MERGED_BRANCH" ]]; then
-        branch_not_found "$MERGED_BRANCH"
-    fi
-    if [[ -z "$MERGE_DEST" ]]; then
-        branch_not_found "$MERGE_DEST"
+    if [[ -z "MERGED_BRANCH" ]]; then
+        branch_not_found "merged branch"
     fi
 else
     branch_not_found
 fi
+
+# Check if branches exist
+git show-ref --verify refs/heads/$BACKUP_BRANCH >/dev/null;
+git show-ref --verify refs/heads/$MERGED_BRANCH &>/dev/null || {
+    git show-ref --verify refs/remotes/origin/$MERGED_BRANCH >/dev/null
+    # Creates local branch from remote
+    git branch $MERGED_BRANCH origin/$MERGED_BRANCH
+}
 
 # Automatically search for the merge request number in the merge commit
 MERGE_NUMBER=$(echo "$COMMIT_DESC" | grep -oE '![0-9]+' | grep -oE '[0-9]+')
@@ -51,22 +77,16 @@ if [[ -z "$MERGE_NUMBER" ]]; then
     exit 1
 fi
 
-echo "Starting backup rebasing on current project \"$CURRENT_PROJECT_NAME\" of merge request number: $MERGE_NUMBER"
-
-# Check if branches exist
-git show-ref --verify refs/heads/$MERGE_DEST >/dev/null;
-git show-ref --verify refs/heads/$BACKUP_BRANCH >/dev/null;
-git show-ref --verify refs/heads/$MERGED_BRANCH 2>/dev/null || {
-    git show-ref --verify refs/remotes/origin/$MERGED_BRANCH >/dev/null
-    # Creates local branch from remote
-    git branch $MERGED_BRANCH origin/$MERGED_BRANCH
-}
+# ---------------------------------------------------------------------------- #
+#                                   EXECUTION                                  #
+# ---------------------------------------------------------------------------- #
+echo "Starting backup rebasing on current project \"$CURRENT_PROJECT_NAME\" of MR $MERGE_NUMBER..."
 
 # Starting merge backup
-echo "Switching to branch $MERGED_BRANCH"
+echo "Switching to branch $MERGED_BRANCH"...
 git switch -q $MERGED_BRANCH
 
-echo "Starting rebase of '$BACKUP_BRANCH' branch into '$MERGED_BRANCH' branch."
+echo "Starting rebase of '$BACKUP_BRANCH' branch into '$MERGED_BRANCH' branch..."
 git rebase -X theirs $BACKUP_BRANCH --committer-date-is-author-date &>/dev/null || {
     while true; do 
         git add .
@@ -75,23 +95,26 @@ git rebase -X theirs $BACKUP_BRANCH --committer-date-is-author-date &>/dev/null 
 }
 
 # Creating delta commit
+echo "Creating delta commit between merge destination and merged branch..."
 git diff $MERGED_BRANCH $MERGE_DEST | git apply --whitespace=nowarn >/dev/null && {
     git add .
     COMMIT_DATE=$(git log -1 --format=%cI $MERGE_DEST)
-    GIT_AUTHOR_DATE="$COMMIT_DATE" GIT_COMMITTER_DATE="$COMMIT_DATE" git commit -m "Delta from $MERGE_DEST and $MERGED_BRANCH after rebase"
+    GIT_AUTHOR_DATE="$COMMIT_DATE" GIT_COMMITTER_DATE="$COMMIT_DATE" git commit -m "Delta from merge destination and $MERGED_BRANCH after rebase" >/dev/null
 }
 
-git branch -d $BACKUP_BRANCH
+echo "Renaming merged branch into backup..."
+git branch -Dq $BACKUP_BRANCH
 git branch -M $BACKUP_BRANCH
 git branch --unset-upstream 
 git tag MR-$MERGE_NUMBER
 
 read -n 1 -p "Delete remote branch ? (y/n) " choice
+echo
 if [[ "$choice" = "y" ]]; then
-    echo "Suppression annulee."
+    echo "Suppression en cours..."
     git push --delete origin $MERGED_BRANCH
 fi
 
-git switch $MERGE_DEST
+git checkout -q $INITIAL_COMMIT
 
 echo "Backup completed successfully."
