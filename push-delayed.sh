@@ -11,6 +11,8 @@ while getopts "g" opt; do
     case $opt in
         g)
             random_generation=true
+            echo "Random date generation enabled."
+            random_generation=true
             ;;
     esac
 done
@@ -24,18 +26,12 @@ next_day=$(date -d "$previous_commit_date + 1 day" +"%Y-%m-%d")
 
 # Date edition
 if $random_generation; then
-    echo "Random date generation enabled."
     if ((RANDOM % 2 == 0)); then
-        # Minuit à 1h30
-        start=0
-        end=1.5 # 1h30
-        base_time="$next_day $start:00:00"
-        max_seconds=($end - $start) * 3600 -1
+        base_time="$next_day 00:00:00"
+        max_seconds=$((2 * 3600))
     else
-        start=18
-        end=24
-        base_time="$next_day $start:00:00"
-        max_seconds=($end - $start) * 3600 -1
+        base_time="$next_day 18:00:00"
+        max_seconds=$((6 * 3600))
     fi
     random_seconds=$((RANDOM % max_seconds))
     D=$(date -d "$base_time $random_seconds seconds" --iso-8601=seconds)
