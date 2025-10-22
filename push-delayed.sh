@@ -12,14 +12,13 @@ while getopts "g" opt; do
         g)
             random_generation=true
             echo "Random date generation enabled."
-            random_generation=true
             ;;
     esac
 done
 
-git switch -c tmp-delay origin/main > /dev/null
+git switch -qc tmp-delay origin/main 
 target_commit=$(git log ..main --reverse --format="%H" | head -1)
-git merge $target_commit --ff-only > /dev/null
+git merge $target_commit --ff-only -q
 
 previous_commit_date=$(git log -2 --pretty=format:"%cd" --date=iso | tail -1)
 next_day=$(date -d "$previous_commit_date + 1 day" +"%Y-%m-%d")
@@ -41,11 +40,11 @@ else
     D=$(date -d "$next_day $time" --iso-8601=seconds)
 fi
 GIT_COMMITTER_DATE="$D" git commit --amend --no-edit --date="$D" > /dev/null
-echo "New commit date: $D"
+echo "New commit date : $D"
 
-git switch main > /dev/null
-git rebase tmp-delay > /dev/null
-git push origin tmp-delay:main > /dev/null
-git branch -d tmp-delay > /dev/null
+git switch main -q
+git -c advice.skippedCherryPicks=false rebase tmp-delay -q
+git push origin tmp-delay:main -q
+git branch -qd tmp-delay
 
-echo "Pushed delayed commit to remote main."
+echo "Pushed delayed commit to remote main successfully"
