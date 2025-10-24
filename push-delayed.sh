@@ -2,7 +2,7 @@
 
 # Push le prochain commit, en modifiant sa date a la prochaine journee
 
-set -eu
+set -euo pipefail
 
 # -g generate l'heure aleatoirement
 random_generation=false
