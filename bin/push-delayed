@@ -13,6 +13,12 @@ while getopts "g" opt; do
             random_generation=true
             echo "Random date generation enabled."
             ;;
+        \?)
+            exit 1
+            ;;
+        :)
+            exit 1
+            ;;
     esac
 done
 
