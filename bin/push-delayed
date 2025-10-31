@@ -1,12 +1,11 @@
 #!/bin/bash
-
-# Push le prochain commit, en modifiant sa date a la prochaine journee
+# Push the next commit, modifying its date to the next day
 
 set -euo pipefail
 
-# -j jump x commits. Ajouter à next commit
+# -j days to jump (skip days)
 days_to_skip=0
-# -g generate l'heure aleatoirement
+# -g generate random time in the day
 random_generation=false
 
 while getopts "gj:" opt; do
@@ -53,7 +52,7 @@ else
     D=$(date -d "$next_day $time" --iso-8601=seconds)
 fi
 GIT_COMMITTER_DATE="$D" git commit --amend --no-edit --date="$D" > /dev/null
-echo "New commit date : $D"
+echo "New commit date : $(date -d "$D" +"%c")"
 
 git switch main -q
 git -c advice.skippedCherryPicks=false rebase tmp-delay -q
