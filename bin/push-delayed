@@ -6,17 +6,17 @@ set -euo pipefail
 # -j days to jump (skip days)
 days_to_skip=0
 # -g generate random time in the day
-random_generation=false
+random_enabled=false
 
 while getopts "gj:" opt; do
     case $opt in
         g)
-            random_generation=true
+            random_enabled=true
             echo "Random date generation enabled."
             ;;
         j)
             days_to_skip="$OPTARG"
-            echo "Days to skip set to $days_to_skip"
+            echo "Days to skip set to $days_to_skip."
             ;;
         \?)
             exit 1
@@ -36,7 +36,7 @@ next_day_interval=$((1 + days_to_skip))
 next_day=$(date -d "$previous_commit_date + $next_day_interval day" +"%Y-%m-%d")
 
 # Date edition
-if $random_generation; then
+if $random_enabled; then
     if ((RANDOM % 2 == 0)); then
         base_time="$next_day 00:00:00"
         max_seconds=$((2 * 3600))
@@ -48,8 +48,8 @@ if $random_generation; then
     D=$(date -d "$base_time $random_seconds seconds" --iso-8601=seconds)
 else
     current_commit_date=$(git log -1 --pretty=format:"%ad" --date=iso)
-    time=$(date -d "$current_commit_date" +%H:%M:%S)
-    D=$(date -d "$next_day $time" --iso-8601=seconds)
+    current_commit_time=$(date -d "$current_commit_date" +%H:%M:%S)
+    D=$(date -d "$next_day $current_commit_time" --iso-8601=seconds)
 fi
 GIT_COMMITTER_DATE="$D" git commit --amend --no-edit --date="$D" > /dev/null
 echo "New commit date : $(date -d "$D" +"%c")"
