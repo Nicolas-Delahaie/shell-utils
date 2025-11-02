@@ -27,8 +27,10 @@ while getopts "gj:" opt; do
     esac
 done
 
-git switch -qc tmp-delay origin/main 
-target_commit=$(git log ..main --reverse --format="%H" | head -1)
+branch_name=$(git rev-parse --abbrev-ref HEAD)
+
+git switch -qc tmp-delay origin/${branch_name} 
+target_commit=$(git log ..${branch_name} --reverse --format="%H" | head -1)
 git merge $target_commit --ff-only -q
 
 previous_commit_date=$(git log -2 --pretty=format:"%cd" --date=iso | tail -1)
@@ -54,9 +56,9 @@ fi
 GIT_COMMITTER_DATE="$D" git commit --amend --no-edit --date="$D" > /dev/null
 echo "New commit date : $(date -d "$D" +"%c")"
 
-git switch main -q
+git switch ${branch_name} -q
 git -c advice.skippedCherryPicks=false rebase tmp-delay -q
-git push origin tmp-delay:main -q
+git push origin tmp-delay:${branch_name} -q
 git branch -qd tmp-delay
 
-echo "Pushed delayed commit to remote main successfully"
+echo "Pushed delayed commit to remote ${branch_name} successfully"
