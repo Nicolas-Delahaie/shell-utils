@@ -3,8 +3,8 @@
 
 set -euo pipefail
 
-# -j days to jump (skip days)
-days_to_skip=0
+# -j days to jump (next day interval)
+next_day_interval=1
 # -g generate random time in the day
 random_enabled=false
 
@@ -15,8 +15,12 @@ while getopts "gj:" opt; do
             echo "Random date generation enabled."
             ;;
         j)
-            days_to_skip="$OPTARG"
-            echo "Days to skip set to $days_to_skip."
+            next_day_interval="$OPTARG"
+            echo "Next day interval set to $next_day_interval."
+            if ((next_day_interval < 1)); then
+                echo "Error: Next day interval must be at least 1."
+                exit 1
+            fi
             ;;
         \?)
             exit 1
@@ -34,7 +38,6 @@ target_commit=$(git log ..${branch_name} --reverse --format="%H" | head -1)
 git merge $target_commit --ff-only -q
 
 previous_commit_date=$(git log -2 --pretty=format:"%cd" --date=iso | tail -1)
-next_day_interval=$((1 + days_to_skip))
 next_day=$(date -d "$previous_commit_date + $next_day_interval day" +"%Y-%m-%d")
 
 # Date edition
