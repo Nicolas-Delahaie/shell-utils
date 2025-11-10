@@ -33,9 +33,17 @@ done
 
 branch_name=$(git rev-parse --abbrev-ref HEAD)
 
-git switch -qc tmp-delay origin/${branch_name} 
-target_commit=$(git log ..${branch_name} --reverse --format="%H" | head -1)
-git merge $target_commit --ff-only -q
+echo -n "Switching to temporary branch tmp-delay..."
+git switch -qc tmp-delay origin/${branch_name}
+echo "done"
+
+echo -n "Searching target commit..."
+target_commit=$(git log origin/${branch_name}..${branch_name} --reverse --format="%H" | head -1)
+echo "done"
+
+echo -n "Merging target commit $target_commit..."
+git merge "$target_commit" --ff-only -q
+echo "done"
 
 previous_commit_date=$(git log -2 --pretty=format:"%cd" --date=iso | tail -1)
 next_day=$(date -d "$previous_commit_date + $next_day_interval day" +"%Y-%m-%d")
@@ -56,12 +64,26 @@ else
     current_commit_time=$(date -d "$current_commit_date" +%H:%M:%S)
     D=$(date -d "$next_day $current_commit_time" --iso-8601=seconds)
 fi
+
+echo -n "Amending commit date..."
 GIT_COMMITTER_DATE="$D" git commit --amend --no-edit --date="$D" > /dev/null
+echo "done"
 echo "New commit date : $(date -d "$D" +"%c")"
 
+echo -n "Preparing to push to remote ${branch_name}..."
 git switch ${branch_name} -q
+echo "done"
+
+echo -n "Rebasing ${branch_name} on tmp-delay..."
 git -c advice.skippedCherryPicks=false rebase tmp-delay -q
+echo "done"
+
+echo -n "Pushing tmp-delay to remote ${branch_name}..."
 git push origin tmp-delay:${branch_name} -q
+echo "done"
+
+echo -n "Deleting temporary branch tmp-delay..."
 git branch -qd tmp-delay
+echo "done"
 
 echo "Pushed delayed commit to remote ${branch_name} successfully"
