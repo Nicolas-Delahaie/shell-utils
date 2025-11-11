@@ -1,7 +1,7 @@
 #!/bin/bash
 # Push the next commit, modifying its date to the next day
 
-set -euo pipefail
+set -eu
 
 # -j days to jump (next day interval)
 next_day_interval=1
