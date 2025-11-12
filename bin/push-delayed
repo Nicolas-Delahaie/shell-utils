@@ -33,12 +33,16 @@ done
 
 branch_name=$(git rev-parse --abbrev-ref HEAD)
 
-echo -n "Switching to temporary branch tmp-delay..."
-git switch -qc tmp-delay origin/${branch_name}
-echo "done"
-
 echo -n "Searching target commit..."
 target_commit=$(git log origin/${branch_name}..${branch_name} --reverse --format="%H" | head -1)
+if [[ -z "$target_commit" ]]; then
+    echo -e "\nError: No commits to push on ${branch_name}" 2>/dev/null
+    exit 1
+fi
+echo "done"
+
+echo -n "Switching to temporary branch tmp-delay..."
+git switch -qc tmp-delay origin/${branch_name}
 echo "done"
 
 echo -n "Merging target commit $target_commit..."
