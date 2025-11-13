@@ -33,6 +33,13 @@ done
 
 branch_name=$(git rev-parse --abbrev-ref HEAD)
 
+echo -n "Checking if branch exists on origin..."
+if ! git show-ref --verify --quiet refs/remotes/origin/${branch_name}; then
+    echo -e "\nError: Branch ${branch_name} does not exist on origin" >&2
+    exit 1
+fi
+echo "done"
+
 echo -n "Searching target commit..."
 target_commit=$(git log origin/${branch_name}..${branch_name} --reverse --format="%H" | head -1)
 if [[ -z "$target_commit" ]]; then
