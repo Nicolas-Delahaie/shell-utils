@@ -66,7 +66,7 @@ if (( ${#commits[@]} == 0 )); then
     echo -e "\nError: No commits to push on ${branch_name}" >&2
     exit 1
 fi
-if (( ${#commits[@]} < commit_count )); then
+if (( ${#commits[@]} != commit_count )); then
     echo -e "\nError: Requested ${commit_count} commits, but only ${#commits[@]} are available to push on ${branch_name}" >&2
     exit 1
 fi
@@ -112,9 +112,10 @@ export dates_str="${dates_str%|}"
 latest_commit="${commits[-1]}"
 echo -n "Switching to latest commit to push..."
 git switch -qc ${TMP_BRANCH} ${latest_commit}
+echo "done"
 
 git rebase origin/${branch_name} --exec \
-'n=$(cat .git/rebase-merge/msgnum); idx=$((n/2)); date=$(echo "$dates_str" | cut -d"|" -f$idx); GIT_COMMITTER_DATE="$date" git commit --amend --no-edit --date="$date"'
+'n=$(cat .git/rebase-merge/msgnum); idx=$((n/2)); date=$(echo "$dates_str" | cut -d"|" -f$idx); GIT_COMMITTER_DATE="$date" git commit --amend --no-edit --date="$date"' >/dev/null
 
 echo -n "Returning to ${branch_name}..."
 git switch ${branch_name} -q
