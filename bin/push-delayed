@@ -7,8 +7,10 @@ set -eu
 next_day_interval=1
 # -g generate random time in the day
 random_enabled=false
+# -n number of commits to push
+commit_count=1
 
-while getopts "gj:" opt; do
+while getopts "gj:n:" opt; do
     case $opt in
         g)
             random_enabled=true
@@ -22,6 +24,14 @@ while getopts "gj:" opt; do
                 exit 1
             fi
             ;;
+        n)
+            commit_count="$OPTARG"
+            echo "Commit count set to $commit_count."
+            if ((commit_count < 1)); then
+                echo "Error: Commit count must be at least 1."
+                exit 1
+            fi
+            ;;
         \?)
             exit 1
             ;;
@@ -31,7 +41,16 @@ while getopts "gj:" opt; do
     esac
 done
 
+TMP_BRANCH="tmp-delay"
 branch_name=$(git rev-parse --abbrev-ref HEAD)
+
+# CHECKS. 
+echo -n "Checking if ${TMP_BRANCH} already exists..."
+if git show-ref --verify --quiet refs/heads/${TMP_BRANCH}; then
+    echo -e "\nError: Temporary branch ${TMP_BRANCH} already exists. Please delete it before running this script." >&2
+    exit 1
+fi
+echo "done"
 
 echo -n "Checking if branch exists on origin..."
 if ! git show-ref --verify --quiet refs/remotes/origin/${branch_name}; then
@@ -40,61 +59,87 @@ if ! git show-ref --verify --quiet refs/remotes/origin/${branch_name}; then
 fi
 echo "done"
 
-echo -n "Searching target commit..."
-target_commit=$(git log origin/${branch_name}..${branch_name} --reverse --format="%H" | head -1)
-if [[ -z "$target_commit" ]]; then
-    echo -e "\nError: No commits to push on ${branch_name}" 2>/dev/null
+# Get commits to push
+echo -n "Searching commits to push..."
+commits=($(git rev-list origin/${branch_name}..${branch_name} --reverse | head -n ${commit_count}))
+if (( ${#commits[@]} == 0 )); then
+    echo -e "\nError: No commits to push on ${branch_name}" >&2
+    exit 1
+fi
+if (( ${#commits[@]} < commit_count )); then
+    echo -e "\nError: Requested ${commit_count} commits, but only ${#commits[@]} are available to push on ${branch_name}" >&2
     exit 1
 fi
 echo "done"
 
-echo -n "Switching to temporary branch tmp-delay..."
-git switch -qc tmp-delay origin/${branch_name}
-echo "done"
-
-echo -n "Merging target commit $target_commit..."
-git merge "$target_commit" --ff-only -q
-echo "done"
-
-previous_commit_date=$(git log -2 --pretty=format:"%cd" --date=iso | tail -1)
-next_day=$(date -d "$previous_commit_date + $next_day_interval day" +"%Y-%m-%d")
-
 # Date edition
 if $random_enabled; then
-    if ((RANDOM % 2 == 0)); then
-        base_time="$next_day 00:00:00"
-        max_seconds=$((2 * 3600))
-    else
-        base_time="$next_day 18:00:00"
-        max_seconds=$((6 * 3600))
-    fi
-    random_seconds=$((RANDOM % max_seconds))
-    D=$(date -d "$base_time $random_seconds seconds" --iso-8601=seconds)
+    echo "Random generation is not enabled yet" >&2
+    exit 1
+    # if ((RANDOM % 2 == 0)); then
+    #     base_time="$next_day 00:00:00"
+    #     max_seconds=$((2 * 3600))
+    # else
+    #     base_time="$next_day 18:00:00"
+    #     max_seconds=$((6 * 3600))
+    # fi
+    # random_seconds=$((RANDOM % max_seconds))
+    # D=$(date -d "$base_time $random_seconds seconds" --iso-8601=seconds)
 else
-    current_commit_date=$(git log -1 --pretty=format:"%ad" --date=iso)
-    current_commit_time=$(date -d "$current_commit_date" +%H:%M:%S)
-    D=$(date -d "$next_day $current_commit_time" --iso-8601=seconds)
+    # Re organizing commit dates
+    dates=()
+    for c in "${commits[@]}"; do
+    dates+=("$(git show -s --format=%aI "$c")")
+    done
+
+    current_date=$(git show -s --format=%cI "origin/${branch_name}")
+    new_date=$(date -d "$current_date + ${next_day_interval} day" +%Y-%m-%d)
+    new_dates=()
+    for d in "${dates[@]}"; do
+    time_part=$(date -d "$d" +%H:%M:%S%z)
+    new_dates+=("$(date -d "$new_date $time_part" "+%Y-%m-%d %H:%M:%S%z")")
+    done
+
+    IFS=$'\n' sorted_new_dates=($(printf '%s\n' "${new_dates[@]}" | sort))
+    unset IFS
 fi
 
-echo -n "Amending commit date..."
-GIT_COMMITTER_DATE="$D" git commit --amend --no-edit --date="$D" > /dev/null
-echo "done"
-echo "New commit date : $(date -d "$D" +"%c")"
+printf -v dates_str '%s|' "${sorted_new_dates[@]}"
+# Needs an export for the git rebase --exec to access it
+export dates_str="${dates_str%|}"
 
-echo -n "Preparing to push to remote ${branch_name}..."
+# Start processing
+latest_commit="${commits[-1]}"
+echo -n "Switching to latest commit to push..."
+git switch -qc ${TMP_BRANCH} ${latest_commit}
+
+git rebase origin/${branch_name} --exec \
+'n=$(cat .git/rebase-merge/msgnum); idx=$((n/2)); date=$(echo "$dates_str" | cut -d"|" -f$idx); GIT_COMMITTER_DATE="$date" git commit --amend --no-edit --date="$date"'
+
+echo -n "Returning to ${branch_name}..."
 git switch ${branch_name} -q
 echo "done"
 
-echo -n "Rebasing ${branch_name} on tmp-delay..."
-git -c advice.skippedCherryPicks=false rebase tmp-delay -q
+echo "Are you sure you want to push ${commit_count} commits to remote ${branch_name} with modified dates? (y/n)"
+read -r response
+if [[ "$response" != "y" && "$response" != "Y" ]]; then
+    echo "Operation cancelled by user."
+    echo -n "Deleting temporary branch ${TMP_BRANCH}..."
+    git branch -qD ${TMP_BRANCH}
+    echo "done"
+    exit 0
+fi
+
+echo -n "Rebasing ${TMP_BRANCH} onto ${branch_name}..."
+git -c advice.skippedCherryPicks=false rebase ${TMP_BRANCH} -q
 echo "done"
 
-echo -n "Pushing tmp-delay to remote ${branch_name}..."
-git push origin tmp-delay:${branch_name} -q
+echo -n "Pushing ${TMP_BRANCH} to remote ${branch_name}..."
+git push origin ${TMP_BRANCH}:${branch_name} -q
 echo "done"
 
-echo -n "Deleting temporary branch tmp-delay..."
-git branch -qd tmp-delay
+echo -n "Deleting temporary branch ${TMP_BRANCH}..."
+git branch -qd ${TMP_BRANCH}
 echo "done"
 
 echo "Pushed delayed commit to remote ${branch_name} successfully"
