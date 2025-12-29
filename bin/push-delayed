@@ -73,36 +73,30 @@ fi
 echo "done"
 
 # Date edition
+latest_pushed_date=$(git show -s --format=%cI "origin/${branch_name}")
+new_date=$(date -d "$latest_pushed_date + ${next_day_interval} day" +%Y-%m-%d)
+new_dates=()
 if $random_enabled; then
-    echo "Random generation is not enabled yet" >&2
-    exit 1
-    # if ((RANDOM % 2 == 0)); then
-    #     base_time="$next_day 00:00:00"
-    #     max_seconds=$((2 * 3600))
-    # else
-    #     base_time="$next_day 18:00:00"
-    #     max_seconds=$((6 * 3600))
-    # fi
-    # random_seconds=$((RANDOM % max_seconds))
-    # D=$(date -d "$base_time $random_seconds seconds" --iso-8601=seconds)
+    for _ in $(seq 1 $commit_count); do
+        random_hour=$((RANDOM % 24))
+        random_minute=$((RANDOM % 60))
+        random_second=$((RANDOM % 60))
+
+        new_time=$(printf "%02d:%02d:%02d" $random_hour $random_minute $random_second)
+        new_dates+=("$(date -d "$new_date $new_time" "+%Y-%m-%d %H:%M:%S%z")")
+    done
 else
-    # Re organizing commit dates
-    dates=()
+    # Existing time extraction
     for c in "${commits[@]}"; do
-    dates+=("$(git show -s --format=%aI "$c")")
+        latest_pushed_date=$(git show -s --format=%aI "$c")
+        time_part=$(date -d "$latest_pushed_date" +%H:%M:%S%z)
+        new_dates+=("$(date -d "$new_date $time_part" "+%Y-%m-%d %H:%M:%S%z")")
     done
-
-    current_date=$(git show -s --format=%cI "origin/${branch_name}")
-    new_date=$(date -d "$current_date + ${next_day_interval} day" +%Y-%m-%d)
-    new_dates=()
-    for d in "${dates[@]}"; do
-    time_part=$(date -d "$d" +%H:%M:%S%z)
-    new_dates+=("$(date -d "$new_date $time_part" "+%Y-%m-%d %H:%M:%S%z")")
-    done
-
-    IFS=$'\n' sorted_new_dates=($(printf '%s\n' "${new_dates[@]}" | sort))
-    unset IFS
 fi
+
+# Re organizing commit dates
+IFS=$'\n' sorted_new_dates=($(printf '%s\n' "${new_dates[@]}" | sort))
+unset IFS
 
 printf -v dates_str '%s|' "${sorted_new_dates[@]}"
 # Needs an export for the git rebase --exec to access it
