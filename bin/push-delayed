@@ -72,25 +72,26 @@ if (( ${#commits[@]} != commit_count )); then
 fi
 echo "done"
 
-# Date edition
+# Dates generation
 latest_pushed_date=$(git show -s --format=%cI "origin/${branch_name}")
-new_date=$(date -d "$latest_pushed_date + ${next_day_interval} day" +%Y-%m-%d)
+new_day=$(date -d "$latest_pushed_date + ${next_day_interval} day" +%Y-%m-%d)
+time_format="%H:%M:%S%z"
+format="+%Y-%m-%d $time_format"
 new_dates=()
 if $random_enabled; then
     for _ in $(seq 1 $commit_count); do
-        random_hour=$((RANDOM % 24))
-        random_minute=$((RANDOM % 60))
-        random_second=$((RANDOM % 60))
+        H=$((RANDOM % 24))
+        M=$((RANDOM % 60))
+        S=$((RANDOM % 60))
 
-        new_time=$(printf "%02d:%02d:%02d" $random_hour $random_minute $random_second)
-        new_dates+=("$(date -d "$new_date $new_time" "+%Y-%m-%d %H:%M:%S%z")")
+        new_dates+=("$(date -d "$new_day ${H}:${M}:${S}" $format)")
     done
 else
     # Existing time extraction
     for c in "${commits[@]}"; do
-        latest_pushed_date=$(git show -s --format=%aI "$c")
-        time_part=$(date -d "$latest_pushed_date" +%H:%M:%S%z)
-        new_dates+=("$(date -d "$new_date $time_part" "+%Y-%m-%d %H:%M:%S%z")")
+        date=$(git show -s --format=%aI "$c")
+        time_part=$(date -d "$date" +%H:%M:%S%z)
+        new_dates+=("$(date -d "$new_day $time_part" "$format")")
     done
 fi
 
@@ -98,9 +99,9 @@ fi
 IFS=$'\n' sorted_new_dates=($(printf '%s\n' "${new_dates[@]}" | sort))
 unset IFS
 
+# Transform to string for export
 printf -v dates_str '%s|' "${sorted_new_dates[@]}"
-# Needs an export for the git rebase --exec to access it
-export dates_str="${dates_str%|}"
+dates_str="${dates_str%|}"
 
 # Start processing
 latest_commit="${commits[-1]}"
@@ -108,6 +109,9 @@ echo -n "Switching to latest commit to push..."
 git switch -qc ${TMP_BRANCH} ${latest_commit}
 echo "done"
 
+# Rebase
+# Needs an export for the git rebase --exec to access it
+export dates_str
 git rebase origin/${branch_name} --exec \
 'n=$(cat .git/rebase-merge/msgnum); idx=$((n/2)); date=$(echo "$dates_str" | cut -d"|" -f$idx); GIT_COMMITTER_DATE="$date" git commit --amend --no-edit --date="$date"' >/dev/null
 
@@ -115,7 +119,7 @@ echo -n "Returning to ${branch_name}..."
 git switch ${branch_name} -q
 echo "done"
 
-echo "Are you sure you want to push ${commit_count} commits to remote ${branch_name} with modified dates? (y/n)"
+echo "Branch ${TMP_BRANCH} will be pushed to remote ${branch_name}. Continue ? (y/n)"
 read -r response
 if [[ "$response" != "y" && "$response" != "Y" ]]; then
     echo "Operation cancelled by user."
