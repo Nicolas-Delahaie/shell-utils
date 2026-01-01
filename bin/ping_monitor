@@ -1,0 +1,35 @@
+#!/bin/bash
+set -e
+
+DEFAULT_DELAY=60
+ALERT_TIME=1000
+
+DELAY=${2:-DEFAULT_DELAY}
+TARGET=${1:-}
+if [ -z "$TARGET" ]; then
+    echo "Usage: target is missing (Hostname or IP address)"
+    exit 1
+fi
+
+LOG_FILE="ping_log_${TARGET}.txt"
+echo "Pings vers $TARGET toutes les $DELAY secondes"> "$LOG_FILE"
+
+while true; do
+    timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+    if PING_OUTPUT=$(ping -c 1 $TARGET); then
+        if [[ $PING_OUTPUT =~ time[[:space:]]([0-9]+)ms ]]; then
+            DURATION=${BASH_REMATCH[1]}
+
+            if (( DURATION > ALERT_TIME )); then
+                echo "$timestamp - Long ping ${DURATION} ms" >> $LOG_FILE
+            else
+                echo "$timestamp - Normal ping ${DURATION} ms" >> $LOG_FILE
+            fi
+        fi
+    else
+        echo "$timestamp - Failed ping" >> $LOG_FILE
+    fi
+
+    sleep $DELAY
+done
