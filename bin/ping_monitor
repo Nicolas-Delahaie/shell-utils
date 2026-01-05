@@ -4,7 +4,7 @@ set -e
 DEFAULT_DELAY=60
 ALERT_TIME=1000
 
-DELAY=${2:-DEFAULT_DELAY}
+DELAY=${2:-$DEFAULT_DELAY}
 TARGET=${1:-}
 if [ -z "$TARGET" ]; then
     echo "Usage: target is missing (Hostname or IP address)"
