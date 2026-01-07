@@ -2,7 +2,7 @@
 set -e
 
 DEFAULT_DELAY=60
-ALERT_TIME=1000
+ALERT_TIME=200
 OUTPUT_FILE_PATH="."
 
 DELAY=${2:-$DEFAULT_DELAY}
@@ -13,7 +13,7 @@ if [ -z "$TARGET" ]; then
 fi
 
 LOG_FILE="${OUTPUT_FILE_PATH}/ping_log_${TARGET}.txt"
-echo "Pings vers $TARGET toutes les $DELAY secondes"> "$LOG_FILE"
+echo "Pinging $TARGET every $DELAY seconds (Normal | Long | Timeout)"> "$LOG_FILE"
 
 if [[ "$(uname -s)" == "MINGW"* ]]; then
     # Git Bash (Windows)
