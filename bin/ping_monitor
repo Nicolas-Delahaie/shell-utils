@@ -40,7 +40,11 @@ while true; do
             echo "$timestamp - Long ping (${DURATION} ms)" >> $LOG_FILE
         fi
     else
-        echo "$timestamp - Failed ping" >> $LOG_FILE
+        if [[ $PING_OUTPUT == *"100% packet loss"* ]]; then
+            echo "$timestamp - Timeout ping" >> $LOG_FILE
+        else
+            echo "Failed ping : $PING_OUTPUT"
+        fi
     fi
 
     sleep $DELAY
