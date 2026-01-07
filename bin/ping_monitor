@@ -15,10 +15,18 @@ fi
 LOG_FILE="${OUTPUT_FILE_PATH}/ping_log_${TARGET}.txt"
 echo "Pings vers $TARGET toutes les $DELAY secondes"> "$LOG_FILE"
 
+if [[ "$(uname -s)" == "MINGW"* ]]; then
+    # Git Bash (Windows)
+    PING_CMD="ping -n 1 $TARGET"
+else
+    # WSL ou Linux
+    PING_CMD="ping -c 1 $TARGET"
+fi
+
 while true; do
     timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
-    if PING_OUTPUT=$(ping -c 1 $TARGET); then
+    if PING_OUTPUT=$($PING_CMD); then
         if [[ $PING_OUTPUT =~ time[[:space:]]([0-9]+)ms ]]; then
             DURATION=${BASH_REMATCH[1]}
 
