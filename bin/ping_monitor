@@ -29,12 +29,15 @@ while true; do
     if PING_OUTPUT=$($PING_CMD); then
         if [[ $PING_OUTPUT =~ time[[:space:]]([0-9]+)ms ]]; then
             DURATION=${BASH_REMATCH[1]}
+        else
+            echo "Unexpected ping output: $PING_OUTPUT"
+            exit 1
+        fi
 
-            if (( DURATION > ALERT_TIME )); then
-                echo "$timestamp - Long ping ${DURATION} ms" >> $LOG_FILE
-            else
-                echo "$timestamp - Normal ping ${DURATION} ms" >> $LOG_FILE
-            fi
+        if (( DURATION < ALERT_TIME )); then
+            echo "$timestamp - Normal ping (${DURATION} ms)" >> $LOG_FILE
+        else
+            echo "$timestamp - Long ping (${DURATION} ms)" >> $LOG_FILE
         fi
     else
         echo "$timestamp - Failed ping" >> $LOG_FILE
