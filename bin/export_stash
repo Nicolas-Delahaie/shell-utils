@@ -1,0 +1,67 @@
+#!/bin/bash
+# Export a stash to a directory for later import
+
+set -eu
+
+stash_num=0
+output_dir=""
+
+while getopts "s:o:" opt; do
+    case $opt in
+        s)
+            stash_num="$OPTARG"
+            ;;
+        o)
+            output_dir="$OPTARG"
+            ;;
+        \?)
+            echo "Usage: export_stash [-o <output_directory>] [-s <stash_num>]" >&2
+            exit 1
+            ;;
+        :)
+            echo "Usage: export_stash [-o <output_directory>] [-s <stash_num>]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Generate default output directory if not provided
+if [[ -z "$output_dir" ]]; then
+    timestamp=$(date +"%Y%m%d_%H%M%S")
+    output_dir="stash_${stash_num}_${timestamp}"
+fi
+
+echo -n "Checking stash@{$stash_num} exists..."
+if ! git stash list | grep -q "stash@{$stash_num}"; then
+    echo -e "\nError: stash@{$stash_num} not found" >&2
+    exit 1
+fi
+echo "done"
+
+echo -n "Creating output directory..."
+if [[ -e "$output_dir" ]]; then
+    echo -e "\nError: $output_dir already exists" >&2
+    exit 1
+fi
+mkdir -p "$output_dir"
+echo "done"
+
+# Extract stash information
+stash_message=$(git stash list | sed -n "$((stash_num + 1))p" | sed 's/^stash@{[0-9]*}: //')
+stash_hash=$(git rev-parse "stash@{$stash_num}")
+base_commit=$(git rev-parse "stash@{$stash_num}^")
+
+echo -n "Exporting stash metadata..."
+cat > "$output_dir/metadata.txt" <<EOF
+stash_message=$stash_message
+stash_hash=$stash_hash
+base_commit=$base_commit
+export_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+EOF
+echo "done"
+
+echo -n "Exporting stash patch..."
+git diff "stash@{$stash_num}^..stash@{$stash_num}" > "$output_dir/stash.patch"
+echo "done"
+
+echo "Stash exported successfully to: $output_dir"
