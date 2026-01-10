@@ -3,30 +3,27 @@
 
 set -eu
 
-stash_dir=""
+stash_dir="${1:-.}"
 target_commit=""
 
-while getopts "d:c:" opt; do
+while getopts "c:" opt; do
     case $opt in
-        d)
-            stash_dir="$OPTARG"
-            ;;
         c)
             target_commit="$OPTARG"
             ;;
         \?)
-            echo "Usage: import_stash -d <stash_dir> [-c <commit_hash>]" >&2
+            echo "Usage: import_stash <stash_dir> [-c <commit_hash>]" >&2
             exit 1
             ;;
         :)
-            echo "Usage: import_stash -d <stash_dir> [-c <commit_hash>]" >&2
+            echo "Usage: import_stash <stash_dir> [-c <commit_hash>]" >&2
             exit 1
             ;;
     esac
 done
 
 if [[ -z "$stash_dir" ]]; then
-    echo "Usage: import_stash -d <stash_dir> [-c <commit_hash>]" >&2
+    echo "Usage: import_stash <stash_dir> [-c <commit_hash>]" >&2
     exit 1
 fi
 
