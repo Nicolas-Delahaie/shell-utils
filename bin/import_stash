@@ -3,75 +3,70 @@
 
 set -eu
 
-stash_dir="${1:-.}"
-target_commit=""
-
-while getopts "c:" opt; do
-    case $opt in
-        c)
-            target_commit="$OPTARG"
-            ;;
-        \?)
-            echo "Usage: import_stash <stash_dir> [-c <commit_hash>]" >&2
-            exit 1
-            ;;
-        :)
-            echo "Usage: import_stash <stash_dir> [-c <commit_hash>]" >&2
-            exit 1
-            ;;
-    esac
-done
+stash_dir="${1:-}"
 
 if [[ -z "$stash_dir" ]]; then
-    echo "Usage: import_stash <stash_dir> [-c <commit_hash>]" >&2
+    echo "Usage: import_stash <stash_dir>" >&2
     exit 1
 fi
 
-echo -n "Checking stash directory..."
+patch_file="$stash_dir/stash.patch"
+metadata_file="$stash_dir/metadata.txt"
+
+echo -n "Checking stash export..."
 if [[ ! -d "$stash_dir" ]]; then
     echo -e "\nError: $stash_dir is not a directory" >&2
     exit 1
 fi
-if [[ ! -f "$stash_dir/metadata.txt" ]] || [[ ! -f "$stash_dir/stash.patch" ]]; then
-    echo -e "\nError: $stash_dir does not contain valid stash export" >&2
+if [[ ! -f "$metadata_file" ]]; then
+    echo -e "\nError: $metadata_file not found" >&2
+    exit 1
+fi
+if [[ ! -f "$patch_file" ]]; then
+    echo -e "\nError: $patch_file not found" >&2
     exit 1
 fi
 echo "done"
 
 echo -n "Reading stash metadata..."
-source "$stash_dir/metadata.txt"
+source "$metadata_file"
 echo "done"
 
-# Use target commit if provided, otherwise use the base commit from export
-commit_to_use="${target_commit:-$base_commit}"
-
-if [[ -n "$commit_to_use" ]]; then
-    echo -n "Checking commit exists..."
-    if ! git rev-parse "$commit_to_use" > /dev/null 2>&1; then
-        echo -e "\nWarning: Commit $commit_to_use not found, applying on current branch"
-        commit_to_use=""
-    else
-        echo "done"
-        echo -n "Checking out $commit_to_use..."
-        git checkout "$commit_to_use" -q
-        echo "done"
-    fi
-fi
-
-echo -n "Applying stash patch..."
-if ! git apply "$stash_dir/stash.patch" 2>/dev/null; then
-    echo -e "\nError: Could not apply patch cleanly" >&2
-    echo "You may need to apply it manually or use a different base commit" >&2
+echo -n "Checking if commit exists..."
+if ! git rev-parse "$base_commit" 2>/dev/null; then
+    echo -e "\nError: Commit $base_commit not found" >&2
     exit 1
 fi
 echo "done"
 
-echo -n "Creating stash..."
-git stash push -m "$stash_message" -q
+echo -n "Switching to $base_commit..."
+original_ref=$(git rev-parse --abbrev-ref HEAD)
+git switch --detach "$base_commit" -q
 echo "done"
 
-echo -n "Deleting stash directory..."
-rm -rf "$stash_dir"
+echo -n "Applying stash patch..."
+git apply "$patch_file" || {
+    echo -e "\nError: Could not apply patch cleanly" >&2
+    echo -n "Returning to $original_ref..."
+    git switch "$original_ref" -q
+    exit 1
+}
 echo "done"
+
+echo -n "Creating stash..."
+git stash push -uq -m "$stash_message"
+echo "done"
+
+echo -n "Returning to $original_ref..."
+git switch "$original_ref" -q
+echo "done"
+
+echo -n "Delete stash directory? (y/n) "
+read -r response
+if [[ "$response" =~ ^[Yy]$ ]]; then
+    echo -n "Deleting stash directory..."
+    rm -rf "$stash_dir"
+    echo "done"
+fi
 
 echo "Stash imported successfully: $stash_message"
