@@ -53,10 +53,10 @@ base_commit=$(git rev-parse "stash@{$stash_num}^")
 
 echo -n "Exporting stash metadata..."
 cat > "$output_dir/metadata.txt" <<EOF
-stash_message=$stash_message
-stash_hash=$stash_hash
-base_commit=$base_commit
-export_date=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+stash_message="$stash_message"
+stash_hash="$stash_hash"
+base_commit="$base_commit"
+export_date="$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
 EOF
 echo "done"
 
