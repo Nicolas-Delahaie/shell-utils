@@ -3,6 +3,11 @@
 
 set -eu
 
+# On macOS, use gnubin
+if [[ "$(uname)" == "Darwin" ]]; then
+    export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
+fi
+
 # -j days to jump (next day interval)
 next_day_interval=1
 # -g generate random time in the day
@@ -104,7 +109,8 @@ printf -v dates_str '%s|' "${sorted_new_dates[@]}"
 dates_str="${dates_str%|}"
 
 # Start processing
-latest_commit="${commits[-1]}"
+last_idx=$((commit_count - 1))
+latest_commit="${commits[$last_idx]}"
 echo -n "Switching to latest commit to push..."
 git switch -qc ${TMP_BRANCH} ${latest_commit}
 echo "done"
