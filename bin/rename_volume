@@ -1,0 +1,14 @@
+#!/bin/bash
+set -euo pipefail
+
+PREVIOUS_VOLUME=$1
+NEW_VOLUME=$2
+
+docker volume create "$NEW_VOLUME"
+
+docker run --rm \
+  -v "$PREVIOUS_VOLUME:/source" \
+  -v "$NEW_VOLUME:/destination" \
+  alpine cp -av /source/. /destination/
+
+docker volume rm "$PREVIOUS_VOLUME"
