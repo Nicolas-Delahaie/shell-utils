@@ -1,14 +1,100 @@
 #!/bin/bash
 set -euo pipefail
 
-PREVIOUS_VOLUME=$1
-NEW_VOLUME=$2
+# Help function
+show_help() {
+    cat << EOF
+Usage: $0 [-f] <PREVIOUS_VOLUME> <NEW_VOLUME>
 
+Rename a Docker volume by copying data.
+
+Options:
+    -f    Force creation of new volume (overwrite if exists)
+    -h    Show this help
+
+Arguments:
+    PREVIOUS_VOLUME    Source volume name to rename
+    NEW_VOLUME         New volume name to create
+EOF
+}
+
+FORCE=false
+
+# Simple getopt parsing
+while getopts "fh" opt; do
+    case $opt in
+        f)
+            FORCE=true
+            ;;
+        h)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $opt" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Remove parsed options from arguments
+shift $((OPTIND - 1))
+
+if [ $# -ne 2 ]; then
+    echo "Error: exactly 2 arguments required (PREVIOUS_VOLUME and NEW_VOLUME)" >&2
+    show_help
+    exit 1
+fi
+
+PREVIOUS_VOLUME=${1:-}
+NEW_VOLUME=${2:-}
+
+echo "Checking parameters..."
+
+if [ -z "$PREVIOUS_VOLUME" ] || [ -z "$NEW_VOLUME" ]; then
+    echo "Error: Volume names cannot be empty" >&2
+    exit 1
+fi
+
+if [ "$PREVIOUS_VOLUME" = "$NEW_VOLUME" ]; then
+    echo "Error: Volume names must be different" >&2
+    exit 1
+fi
+
+if ! docker volume inspect "$PREVIOUS_VOLUME" &>/dev/null; then
+    echo "Error: Volume '$PREVIOUS_VOLUME' does not exist" >&2
+    echo "Available volumes:"
+    docker volume ls
+    exit 1
+fi
+
+CONTAINERS_USING=$(docker ps -a --filter volume="$PREVIOUS_VOLUME" --format "{{.Names}}" | tr '\n' ',' | sed 's/,$//')
+if [ -n "$CONTAINERS_USING" ]; then
+    echo "Error: Volume '$PREVIOUS_VOLUME' is in use by: $CONTAINERS_USING" >&2
+    exit 1
+fi
+
+if docker volume inspect "$NEW_VOLUME" &>/dev/null; then
+    if [ "$FORCE" = true ]; then
+        echo "Volume '$NEW_VOLUME' already exists. Removing..."
+        docker volume rm "$NEW_VOLUME"
+    else
+        echo "Error: Volume '$NEW_VOLUME' already exists" >&2
+        echo "Use -f option to force overwrite" >&2
+        exit 1
+    fi
+fi
+
+echo "Creating volume '$NEW_VOLUME'..."
 docker volume create "$NEW_VOLUME"
 
+echo "Copying data from '$PREVIOUS_VOLUME' to '$NEW_VOLUME'..."
 docker run --rm \
   -v "$PREVIOUS_VOLUME:/source" \
   -v "$NEW_VOLUME:/destination" \
   alpine cp -av /source/. /destination/
 
+echo "Removing volume '$PREVIOUS_VOLUME'..."
 docker volume rm "$PREVIOUS_VOLUME"
+
+echo "Success: Volume renamed '$PREVIOUS_VOLUME' -> '$NEW_VOLUME'"
