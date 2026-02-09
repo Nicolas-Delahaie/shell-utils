@@ -14,9 +14,14 @@ next_day_interval=1
 random_enabled=false
 # -n number of commits to push
 commit_count=1
+# -i for interractive mode, which waits for a confirmation
+interactive=false
 
-while getopts "gj:n:" opt; do
+while getopts "igj:n:" opt; do
     case $opt in
+        i)
+            interactive=true
+            ;;
         g)
             random_enabled=true
             echo "Random date generation enabled."
@@ -125,14 +130,16 @@ echo -n "Returning to ${branch_name}..."
 git switch ${branch_name} -q
 echo "done"
 
-echo "Branch ${TMP_BRANCH} will be pushed to remote ${branch_name}. Continue ? (y/n)"
-read -r response
-if [[ "$response" != "y" && "$response" != "Y" ]]; then
-    echo "Operation cancelled by user."
-    echo -n "Deleting temporary branch ${TMP_BRANCH}..."
-    git branch -qD ${TMP_BRANCH}
-    echo "done"
-    exit 0
+if $interactive; then
+    echo "Branch ${TMP_BRANCH} will be pushed to remote ${branch_name}. Continue ? (y/n)"
+    read -r response
+    if [[ "$response" != "y" && "$response" != "Y" ]]; then
+        echo "Operation cancelled by user."
+        echo -n "Deleting temporary branch ${TMP_BRANCH}..."
+        git branch -qD ${TMP_BRANCH}
+        echo "done"
+        exit 0
+    fi
 fi
 
 echo -n "Rebasing ${TMP_BRANCH} onto ${branch_name}..."
