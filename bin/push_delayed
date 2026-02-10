@@ -19,68 +19,56 @@ interactive=false
 
 while getopts "igj:n:" opt; do
     case $opt in
-        i)
-            interactive=true
-            ;;
-        g)
-            random_enabled=true
-            echo "Random date generation enabled."
-            ;;
+        i) interactive=true ;;
+        g) random_enabled=true ;;
         j)
             next_day_interval="$OPTARG"
             echo "Next day interval set to $next_day_interval."
             if ((next_day_interval < 1)); then
-                echo "Error: Next day interval must be at least 1."
+                echo "Error: Next day interval must be at least 1." >&2
                 exit 1
             fi
             ;;
         n)
             commit_count="$OPTARG"
-            echo "Commit count set to $commit_count."
             if ((commit_count < 1)); then
-                echo "Error: Commit count must be at least 1."
+                echo "Error: Commit count must be at least 1." >&2
                 exit 1
             fi
             ;;
-        \?)
-            exit 1
-            ;;
-        :)
-            exit 1
-            ;;
+        \?|:) exit 1 ;;
     esac
 done
 
 TMP_BRANCH="tmp-delay"
 branch_name=$(git rev-parse --abbrev-ref HEAD)
 
-# CHECKS. 
-echo -n "Checking if ${TMP_BRANCH} already exists..."
+cleanup() {
+    echo -n "Deleting temporary branch ${TMP_BRANCH}..."
+    git branch -qD ${TMP_BRANCH}
+    echo "done"
+}
+
+# Checks
 if git show-ref --verify --quiet refs/heads/${TMP_BRANCH}; then
-    echo -e "\nError: Temporary branch ${TMP_BRANCH} already exists. Please delete it before running this script." >&2
+    echo "Error: Temporary branch ${TMP_BRANCH} already exists. Please delete it before running this script." >&2
     exit 1
 fi
-echo "done"
 
-echo -n "Checking if branch exists on origin..."
 if ! git show-ref --verify --quiet refs/remotes/origin/${branch_name}; then
-    echo -e "\nError: Branch ${branch_name} does not exist on origin" >&2
+    echo "Error: Branch ${branch_name} does not exist on origin." >&2
     exit 1
 fi
-echo "done"
 
-# Get commits to push
-echo -n "Searching commits to push..."
 commits=($(git rev-list origin/${branch_name}..${branch_name} --reverse | head -n ${commit_count}))
 if (( ${#commits[@]} == 0 )); then
-    echo -e "\nError: No commits to push on ${branch_name}" >&2
+    echo "Error: No commits to push on ${branch_name}." >&2
     exit 1
 fi
 if (( ${#commits[@]} != commit_count )); then
-    echo -e "\nError: Requested ${commit_count} commits, but only ${#commits[@]} are available to push on ${branch_name}" >&2
+    echo "Error: Requested ${commit_count} commits, but only ${#commits[@]} are available to push on ${branch_name}." >&2
     exit 1
 fi
-echo "done"
 
 # Dates generation
 latest_pushed_date=$(git show -s --format=%cI "origin/${branch_name}")
@@ -88,16 +76,12 @@ new_day=$(date -d "$latest_pushed_date + ${next_day_interval} day" +%Y-%m-%d)
 time_format="%H:%M:%S%z"
 format="+%Y-%m-%d $time_format"
 new_dates=()
+
 if $random_enabled; then
     for _ in $(seq 1 $commit_count); do
-        H=$((RANDOM % 24))
-        M=$((RANDOM % 60))
-        S=$((RANDOM % 60))
-
-        new_dates+=("$(date -d "$new_day ${H}:${M}:${S}" $format)")
+        new_dates+=("$(date -d "$new_day $((RANDOM % 24)):$((RANDOM % 60)):$((RANDOM % 60))" $format)")
     done
 else
-    # Existing time extraction
     for c in "${commits[@]}"; do
         date=$(git show -s --format=%aI "$c")
         time_part=$(date -d "$date" +%H:%M:%S%z)
@@ -113,14 +97,13 @@ unset IFS
 printf -v dates_str '%s|' "${sorted_new_dates[@]}"
 dates_str="${dates_str%|}"
 
-# Start processing
+# Create tmp branch on the latest commit to push, then rebase to amend dates
 last_idx=$((commit_count - 1))
 latest_commit="${commits[$last_idx]}"
-echo -n "Switching to latest commit to push..."
+echo -n "Switching to ${TMP_BRANCH}..."
 git switch -qc ${TMP_BRANCH} ${latest_commit}
 echo "done"
 
-# Rebase
 # Needs an export for the git rebase --exec to access it
 export dates_str
 git rebase origin/${branch_name} --exec \
@@ -131,27 +114,22 @@ git switch ${branch_name} -q
 echo "done"
 
 if $interactive; then
-    echo "Branch ${TMP_BRANCH} will be pushed to remote ${branch_name}. Continue ? (y/n)"
-    read -r response
+    read -r -p "Branch ${TMP_BRANCH} will be pushed to remote ${branch_name}. Continue? (y/n) " response
     if [[ "$response" != "y" && "$response" != "Y" ]]; then
-        echo "Operation cancelled by user."
-        echo -n "Deleting temporary branch ${TMP_BRANCH}..."
-        git branch -qD ${TMP_BRANCH}
-        echo "done"
+        echo "Operation cancelled."
+        cleanup
         exit 0
     fi
 fi
 
-echo -n "Rebasing ${TMP_BRANCH} onto ${branch_name}..."
+echo -n "Rebasing ${branch_name} onto ${TMP_BRANCH}..."
 git -c advice.skippedCherryPicks=false rebase ${TMP_BRANCH} -q
 echo "done"
 
-echo -n "Pushing ${TMP_BRANCH} to remote ${branch_name}..."
+echo -n "Pushing to remote ${branch_name}..."
 git push origin ${TMP_BRANCH}:${branch_name} -q
 echo "done"
 
-echo -n "Deleting temporary branch ${TMP_BRANCH}..."
-git branch -qd ${TMP_BRANCH}
-echo "done"
+cleanup
 
-echo "Pushed delayed commit to remote ${branch_name} successfully"
+echo "Pushed delayed commit to remote ${branch_name} successfully."
