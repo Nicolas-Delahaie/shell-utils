@@ -14,13 +14,16 @@ next_day_interval=1
 random_enabled=false
 # -n number of commits to push
 commit_count=1
+# -s spread commits over consecutive days (one per day)
+spread_days=false
 # -i for interractive mode, which waits for a confirmation
 interactive=false
 
-while getopts "igj:n:" opt; do
+while getopts "igsj:n:" opt; do
     case $opt in
         i) interactive=true ;;
         g) random_enabled=true ;;
+        s) spread_days=true ;;
         j)
             next_day_interval="$OPTARG"
             echo "Next day interval set to $next_day_interval."
@@ -77,17 +80,23 @@ time_format="%H:%M:%S%z"
 format="+%Y-%m-%d $time_format"
 new_dates=()
 
-if $random_enabled; then
-    for _ in $(seq 1 $commit_count); do
-        new_dates+=("$(date -d "$new_day $((RANDOM % 24)):$((RANDOM % 60)):$((RANDOM % 60))" $format)")
-    done
-else
-    for c in "${commits[@]}"; do
-        date=$(git show -s --format=%aI "$c")
-        time_part=$(date -d "$date" +%H:%M:%S%z)
-        new_dates+=("$(date -d "$new_day $time_part" "$format")")
-    done
-fi
+for ((i = 0; i < commit_count; i++)); do
+    # In spread mode, each commit goes on a separate consecutive day
+    if $spread_days; then
+        day=$(date -d "$new_day + $i day" +%Y-%m-%d)
+    else
+        day=$new_day
+    fi
+
+    # Random time or preserve original commit time
+    if $random_enabled; then
+        time="$((RANDOM % 24)):$((RANDOM % 60)):$((RANDOM % 60))"
+    else
+        time=$(date -d "$(git show -s --format=%aI "${commits[$i]}")" +"$time_format")
+    fi
+
+    new_dates+=("$(date -d "$day $time" "$format")")
+done
 
 # Re organizing commit dates
 IFS=$'\n' sorted_new_dates=($(printf '%s\n' "${new_dates[@]}" | sort))
