@@ -10,7 +10,7 @@ fi
 
 # -j days to jump (next day interval)
 next_day_interval=1
-# -g generate random time in the day
+# -r generate random time in the day
 random_enabled=false
 # -n number of commits to push
 commit_count=1
@@ -19,10 +19,10 @@ spread_days=false
 # -i for interractive mode, which waits for a confirmation
 interactive=false
 
-while getopts "igsj:n:" opt; do
+while getopts "irsj:n:" opt; do
     case $opt in
         i) interactive=true ;;
-        g) random_enabled=true ;;
+        r) random_enabled=true ;;
         s) spread_days=true ;;
         j)
             next_day_interval="$OPTARG"
