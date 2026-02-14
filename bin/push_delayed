@@ -8,6 +8,13 @@ if [[ "$(uname)" == "Darwin" ]]; then
     export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:$PATH"
 fi
 
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+AMEND_DATE_SCRIPT="${SCRIPT_DIR}/utils/amend_date"
+if [[ ! -x "$AMEND_DATE_SCRIPT" ]]; then
+    echo "Error: ${AMEND_DATE_SCRIPT} not found or not executable." >&2
+    exit 1
+fi
+
 # -j days to jump (next day interval)
 next_day_interval=1
 # -r generate random time in the day
@@ -59,8 +66,8 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 
 if git show-ref --verify --quiet refs/heads/${TMP_BRANCH}; then
-    echo "Error: Temporary branch ${TMP_BRANCH} already exists. Please delete it before running this script." >&2
-    exit 1
+    echo "Deleting leftover temporary branch ${TMP_BRANCH} from a previous run..." >&2
+    git branch -qd ${TMP_BRANCH} || { echo "Error: Could not delete ${TMP_BRANCH}." >&2; exit 1; }
 fi
 
 if ! git show-ref --verify --quiet refs/remotes/origin/${branch_name}; then
@@ -120,8 +127,7 @@ echo "done"
 
 # Needs an export for the git rebase --exec to access it
 export dates_str
-git rebase origin/${branch_name} --exec \
-'n=$(cat .git/rebase-merge/msgnum); idx=$((n/2)); date=$(echo "$dates_str" | cut -d"|" -f$idx); GIT_COMMITTER_DATE="$date" git commit --amend --no-edit --date="$date"' >/dev/null
+git rebase origin/${branch_name} --exec "$AMEND_DATE_SCRIPT" >/dev/null
 
 echo -n "Returning to ${branch_name}..."
 git switch ${branch_name} -q

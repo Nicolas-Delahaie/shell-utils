@@ -1,0 +1,6 @@
+#!/bin/bash
+# Used by push_delayed during rebase --exec to amend commit dates
+n=$(cat .git/rebase-merge/msgnum)
+idx=$((n / 2))
+date=$(echo "$dates_str" | cut -d"|" -f$idx)
+GIT_COMMITTER_DATE="$date" git commit --amend --no-edit --date="$date"
